@@ -49,9 +49,9 @@ optional dependency.
 oomd also requires GCC 8+ or clang 6+. Other compilers have not been tested.
 
     $ git clone https://github.com/facebookincubator/oomd
-    $ cd oomd/oomd
-    $ meson build && ninja -C build
-    $ cd build && sudo ninja install
+    $ cd oomd
+    $ meson build && meson configure -Dprefix=/usr build && ninja -C build
+    $ cd build && rm -rf ${PROTO} && DESTDIR=${PROTO} ninja install
 
 ## Configuration
 
