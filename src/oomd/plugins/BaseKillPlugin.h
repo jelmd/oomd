@@ -141,7 +141,7 @@ class BaseKillPlugin : public Engine::BasePlugin {
   /*
    * Sends SIGKILL to every PID in @param procs
    */
-  virtual int tryToKillPids(const std::vector<int>& procs);
+  virtual int tryToKillPids(const std::vector<int>& procs, bool kill);
 
   virtual KillUuid generateKillUuid() const;
 
@@ -194,7 +194,7 @@ class BaseKillPlugin : public Engine::BasePlugin {
   virtual bool pastPrekillHookTimeout(const OomdContext& ctx) const;
 
  private:
-  virtual int getAndTryToKillPids(const CgroupContext& target);
+  virtual int getAndTryToKillPids(const CgroupContext& target, bool kill);
 
   enum class KillResult {
     SUCCESS,

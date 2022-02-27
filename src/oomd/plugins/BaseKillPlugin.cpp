@@ -400,7 +400,7 @@ BaseKillPlugin::BaseKillPlugin() {
   Oomd::setStat(CoreStats::kKillsKey, 0);
 }
 
-int BaseKillPlugin::getAndTryToKillPids(const CgroupContext& target) {
+int BaseKillPlugin::getAndTryToKillPids(const CgroupContext& target, bool kill){
   static constexpr size_t stream_size = 20;
   int nr_killed = 0;
 
@@ -422,11 +422,11 @@ int BaseKillPlugin::getAndTryToKillPids(const CgroupContext& target) {
     OCHECK(line != nullptr);
     pids.push_back(std::stoi(line));
     if (pids.size() == stream_size) {
-      nr_killed += tryToKillPids(pids);
+      nr_killed += tryToKillPids(pids, kill);
       pids.clear();
     }
   }
-  nr_killed += tryToKillPids(pids);
+  nr_killed += tryToKillPids(pids, kill);
   ::free(line);
   ::fclose(fp);
 
@@ -435,7 +435,7 @@ int BaseKillPlugin::getAndTryToKillPids(const CgroupContext& target) {
     for (const auto& child_name : *children) {
       if (auto child_ctx =
               target.oomd_ctx().addChildToCacheAndGet(target, child_name)) {
-        nr_killed += getAndTryToKillPids(*child_ctx);
+        nr_killed += getAndTryToKillPids(*child_ctx, kill);
       }
     }
   }
@@ -453,7 +453,7 @@ bool BaseKillPlugin::tryToKillCgroup(
 
   int last_nr_killed = 0;
   int nr_killed = 0;
-  int tries = 10;
+  int tries = 20;
 
   if (dry) {
     OLOG << "OOMD: In dry-run mode; would have tried to kill " << cgroup_path;
@@ -464,11 +464,11 @@ bool BaseKillPlugin::tryToKillCgroup(
 
   reportKillUuidToXattr(cgroup_path, kill_uuid);
   reportKillInitiationToXattr(cgroup_path);
-  while (tries--) {
+  for (; tries; tries--) {
     // Descendent cgroups created during killing will be missed because
     // getAndTryToKillPids reads cgroup children from OomdContext's cache
 
-    nr_killed += getAndTryToKillPids(target);
+    nr_killed += getAndTryToKillPids(target, tries < 11);
 
     if (nr_killed == last_nr_killed) {
       break;
@@ -488,7 +488,7 @@ bool BaseKillPlugin::tryToKillCgroup(
   return nr_killed > 0;
 }
 
-int BaseKillPlugin::tryToKillPids(const std::vector<int>& pids) {
+int BaseKillPlugin::tryToKillPids(const std::vector<int>& pids, bool kill) {
   std::ostringstream buf;
   int nr_killed = 0, c = 0;
 
@@ -502,7 +502,7 @@ int BaseKillPlugin::tryToKillPids(const std::vector<int>& pids) {
       buf << " " << pid;
     }
 
-    if (::kill(static_cast<pid_t>(pid), SIGKILL) == 0) {
+    if (::kill(static_cast<pid_t>(pid), kill ? SIGKILL : SIGTERM) == 0) {
       nr_killed++;
     } else {
       buf << "[E" << errno << "]";
