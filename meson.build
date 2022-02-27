@@ -1,7 +1,6 @@
 # Copyright (C) 2018-present, Meta Platforms, Inc. and affiliates
 
 project('oomd', 'cpp',
-  version : 'v0.5.0',
   meson_version : '>= 0.45',
   license : 'GPL2',
   default_options : ['stdsplit=false', 'cpp_std=c++17'])
@@ -9,16 +8,6 @@ project('oomd', 'cpp',
 cpp_args = ['-DMESON_BUILD']
 
 inc = include_directories('src')
-
-# Plumbing to #define a GIT_VERSION so Main.cpp can print it out
-vcs_tagger = [meson.source_root() + '/vcs_tagger.sh',
-    meson.source_root(),
-    meson.project_version()]
-version_h = vcs_tag(
-    input : 'src/oomd/include/Version.h.in',
-    output : 'Version.h',
-    command : vcs_tagger)
-versiondep = declare_dependency(sources : version_h)
 
 srcs = files('''
     src/oomd/CgroupContext.cpp
@@ -68,8 +57,7 @@ fixture_srcs = files('''
     src/oomd/util/Fixture.cpp
 '''.split())
 
-deps = [versiondep,
-        dependency('jsoncpp'),
+deps = [dependency('jsoncpp'),
         dependency('threads')]
 
 # Optional dependencies

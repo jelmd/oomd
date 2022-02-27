@@ -46,11 +46,7 @@
 #include "oomd/util/Fs.h"
 #include "oomd/util/Util.h"
 
-#ifdef MESON_BUILD
-#include "Version.h" // @manual
-#else
-#define GIT_VERSION "unknown"
-#endif
+#include "oomd/include/Version.h"
 
 #ifdef MESON_BUILD
 namespace fs = std::filesystem;
