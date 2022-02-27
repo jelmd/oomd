@@ -51,7 +51,7 @@ oomd also requires GCC 8+ or clang 6+. Other compilers have not been tested.
     $ git clone https://github.com/facebookincubator/oomd
     $ cd oomd
     $ meson build && meson configure -Dprefix=/usr build && ninja -C build
-    $ cd build && rm -rf ${PROTO} && DESTDIR=${PROTO} ninja install
+    $ rm -rf ${PROTO} && DESTDIR=${PROTO} ninja -C build install
 
 ## Configuration
 
@@ -73,7 +73,7 @@ If meson detects gtest/gmock is installed, meson will generate build rules for t
 
     $ cd oomd
     $ rm -rf build
-    $ meson build && ninja test -C build
+    $ meson build && ninja -C build test
 
 ## Writing custom plugins
 
