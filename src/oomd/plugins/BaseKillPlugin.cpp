@@ -220,7 +220,7 @@ BaseKillPlugin::KillResult BaseKillPlugin::tryToKillSomething(
   auto sorted =
       std::make_shared<std::vector<OomdContext::ConstCgroupContextRef>>(
           rankForKilling(ctx, initial_cgroups));
-  OomdContext::dump(*sorted, !debug_);
+  OomdContext::dump(*sorted);
 
   // push the lowest ranked sibling onto the next_best_option_stack first, so
   // the highest ranked sibling is on top
@@ -269,7 +269,7 @@ BaseKillPlugin::KillResult BaseKillPlugin::resumeTryingToKillSomething(
             std::make_shared<std::vector<OomdContext::ConstCgroupContextRef>>(
                 rankForKilling(ctx, children));
 
-        OomdContext::dump(*sorted, !debug_);
+        OomdContext::dump(*sorted);
 
         // push the lowest ranked sibling onto the next_best_option_stack first,
         // so the highest ranked sibling is on top
@@ -490,7 +490,7 @@ bool BaseKillPlugin::tryToKillCgroup(
 
 int BaseKillPlugin::tryToKillPids(const std::vector<int>& pids) {
   std::ostringstream buf;
-  int nr_killed = 0;
+  int nr_killed = 0, c = 0;
 
   for (int pid : pids) {
     auto comm_path = std::string("/proc/") + std::to_string(pid) + "/comm";
@@ -507,9 +507,13 @@ int BaseKillPlugin::tryToKillPids(const std::vector<int>& pids) {
     } else {
       buf << "[E" << errno << "]";
     }
+    c++;
   }
   if (buf.tellp()) {
-    OLOG << "Killed " << nr_killed << ":" << buf.str();
+    // Actually delivering the signal successfully doesn't mean, that the
+    // process really got killed [yet].
+    OLOG << (kill ? "Killing " : "Terminating ") << nr_killed
+      << (c == 1 ? " pid:" : " pids:") << buf.str();
   }
   return nr_killed;
 }
@@ -587,13 +591,14 @@ bool BaseKillPlugin::tryToLogAndKillCgroup(
         candidate.cgroup_ctx.get().mem_pressure().value_or(ResourcePressure{});
     std::ostringstream oss;
     oss << std::setprecision(2) << std::fixed;
-    oss << mem_pressure.sec_10 << " " << mem_pressure.sec_60 << " "
-        << mem_pressure.sec_300 << " "
-        << candidate.cgroup_ctx.get().cgroup().relativePath() << " "
-        << candidate.cgroup_ctx.get().current_usage().value_or(0) << " "
-        << "ruleset:[" << action_context.ruleset_name << "] "
-        << "detectorgroup:[" << action_context.detectorgroup << "] "
-        << "killer:" << (dry_ ? "(dry)" : "") << getName() << " v2";
+    oss << "'" << candidate.cgroup_ctx.get().cgroup().relativePath()
+        << "'  '"
+        << mem_pressure.sec_10 << "|" << mem_pressure.sec_60 << "|"
+        << mem_pressure.sec_300 << "'  '"
+        << (candidate.cgroup_ctx.get().current_usage().value_or(0) >> 20)
+        << " MiB'  '" << action_context.ruleset_name
+        << "'  '" << action_context.detectorgroup
+        << "'  '" << (dry_ ? "(dry)" : "") << getName() << "'";
     if (!dry_) {
       Oomd::incrementStat(CoreStats::kKillsKey, 1);
     }

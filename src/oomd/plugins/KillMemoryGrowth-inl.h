@@ -54,6 +54,13 @@ void KillMemoryGrowth<Base>::prerun(OomdContext& ctx) {
       ctx, [](const auto& cgroup_ctx) { cgroup_ctx.average_usage(); });
 }
 
+// Solely used for ologKillTarget() to avoid running the ranking and related
+// calculations twice. Shouldn't be a problem, as long as each evaluation cycle
+// calls get_ranking_fn() only once, before ologKillTarget(), and the app stays
+// single threaded.
+static KMGPhase phase_last = KMGPhase::SIZE_NO_THRESHOLD;
+static int64_t cur_mem_thresh = 0, eff_mem_thresh = 0;
+
 template <typename Base>
 std::function<std::pair<KMGPhase, std::tuple<int64_t, float, int64_t>>(
     const CgroupContext&)>
@@ -68,8 +75,10 @@ KillMemoryGrowth<Base>::get_ranking_fn(
   for (const CgroupContext& cgroup_ctx : cgroups) {
     cur_memcurrent += cgroup_ctx.current_usage().value_or(0);
   }
+
   int64_t size_threshold_in_bytes =
       cur_memcurrent * (static_cast<double>(size_threshold_) / 100);
+  cur_mem_thresh = size_threshold_in_bytes;
 
   // Only the top P(growing_size_percentile_) cgroups by usage are eligible
   // for killing by growth. nth is the index of the idx of the cgroup w/
@@ -96,6 +105,7 @@ KillMemoryGrowth<Base>::get_ranking_fn(
     growth_kill_min_effective_usage_threshold =
         cgroups_mutable_copy[nth].get().effective_usage().value_or(0);
   }
+  eff_mem_thresh = growth_kill_min_effective_usage_threshold;
 
   return [=](const CgroupContext& cgroup_ctx) {
     int64_t current_usage = cgroup_ctx.current_usage().value_or(0);
@@ -112,6 +122,7 @@ KillMemoryGrowth<Base>::get_ranking_fn(
     KMGPhase phase = size_phase_eligible ? KMGPhase::SIZE_THRESHOLD
         : growth_phase_eligible          ? KMGPhase::GROWTH
                                          : KMGPhase::SIZE_NO_THRESHOLD;
+    phase_last = phase;
 
     // All cgroups in SIZE_THRESHOLD phase rank first, then groups in
     // KMGPhase::GROWTH, then KMGPhase::SIZE_NO_THRESHOLD because tuples
@@ -146,20 +157,15 @@ void KillMemoryGrowth<Base>::ologKillTarget(
     OomdContext& ctx,
     const CgroupContext& target,
     const std::vector<OomdContext::ConstCgroupContextRef>& peers) {
-  auto rank_cgroup = get_ranking_fn(ctx, peers);
 
-  int64_t sib_memcurrent = 0;
-  for (const CgroupContext& cgroup_ctx : peers) {
-    sib_memcurrent += cgroup_ctx.current_usage().value_or(0);
-  }
-
-  switch (rank_cgroup(target).first) {
+  OLOG<<"Threshold current usage (phase 1): "<<(cur_mem_thresh >> 20)<<" MiB";
+  OLOG<<"Threshold effective usage (phase 2): "<<(eff_mem_thresh >> 20)<<" MiB";
+  switch (phase_last) {
     case KMGPhase::SIZE_THRESHOLD: {
-      OLOG << "Picked \"" << target.cgroup().relativePath() << "\" ("
-           << target.current_usage().value_or(0) / 1024 / 1024
-           << "MB) based on size > " << size_threshold_ << "% of total "
-           << sib_memcurrent / 1024 / 1024 << "MB"
-           << " with kill preference "
+      OLOG << "Picked '" << target.cgroup().relativePath() << "' ("
+           << (target.current_usage().value_or(0) >> 20)
+           << " MiB) based on current mem usage threshold " << size_threshold_
+           << " MiB with kill preference "
            << target.kill_preference().value_or(KillPreference::NORMAL);
       break;
     }
@@ -167,9 +173,9 @@ void KillMemoryGrowth<Base>::ologKillTarget(
     case KMGPhase::GROWTH: {
       std::ostringstream oss;
       oss << std::setprecision(2) << std::fixed;
-      oss << "Picked \"" << target.cgroup().relativePath() << "\" ("
-          << target.current_usage().value_or(0) / 1024 / 1024
-          << "MB) based on growth rate " << target.memory_growth().value_or(0)
+      oss << "Picked '" << target.cgroup().relativePath() << "' ("
+          << (target.current_usage().value_or(0) >> 20 )
+          << " MiB) based on growth rate " << target.memory_growth().value_or(0)
           << " (min growth rate " << min_growth_ratio_ << ")"
           << " among P" << growing_size_percentile_ << " largest,"
           << " with kill preference "
@@ -179,11 +185,11 @@ void KillMemoryGrowth<Base>::ologKillTarget(
     }
 
     case KMGPhase::SIZE_NO_THRESHOLD: {
-      OLOG << "Picked \"" << target.cgroup().relativePath() << "\" ("
-           << target.current_usage().value_or(0) / 1024 / 1024
-           << "MB) based on size > " << size_threshold_ << "% of total "
-           << sib_memcurrent / 1024 / 1024 << "MB (size threshold overridden)"
-           << " with kill preference "
+      OLOG << "Picked '" << target.cgroup().relativePath() << "' ("
+           << (target.current_usage().value_or(0) >> 20)
+           << " MiB) based on effective mem usage of "
+           << (target.effective_usage().value_or(0) >> 20)
+           << " MiB with kill preference "
            << target.kill_preference().value_or(KillPreference::NORMAL);
       break;
     }

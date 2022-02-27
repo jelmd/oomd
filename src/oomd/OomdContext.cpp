@@ -145,12 +145,20 @@ void OomdContext::dump(
     const std::vector<ConstCgroupContextRef>& cgroup_ctxs,
     const bool skip_negligible) {
   auto cgmax = std::numeric_limits<int64_t>::max();
-  OLOG << "Dumping OomdContext: ";
+  int64_t mb = 0, emb = 0, skipped = 0;
+  for (const CgroupContext& cgroup_ctx : cgroup_ctxs) {
+    mb += cgroup_ctx.current_usage().value_or(0);
+    emb += cgroup_ctx.effective_usage().value_or(0);
+  }
+  OLOG << "Dumping OomdContext of " << cgroup_ctxs.size() <<" matched cgroups:";
+  OLOG << "  current usage: cumulative=" << (mb >> 20) << " MiB";
+  OLOG << "  effective usage: cumulative=" << (emb >> 20) << " MiB";
   for (const CgroupContext& cgroup_ctx : cgroup_ctxs) {
     auto mem_pressure = cgroup_ctx.mem_pressure().value_or(ResourcePressure{});
     auto io_pressure = cgroup_ctx.io_pressure().value_or(ResourcePressure{});
     auto current_usage = cgroup_ctx.current_usage().value_or(0);
     auto average_usage = cgroup_ctx.average_usage().value_or(0);
+    auto effective_usage = cgroup_ctx.effective_usage().value_or(0);
     auto memory_low = cgroup_ctx.memory_low().value_or(0);
     auto memory_min = cgroup_ctx.memory_min().value_or(0);
     auto memory_high = cgroup_ctx.memory_high().value_or(cgmax);
@@ -182,31 +190,40 @@ void OomdContext::dump(
               io_pressure.sec_60 >= press_min ||
               io_pressure.sec_300 >= press_min || current_usage > mem_min ||
               average_usage > mem_min || swap_usage > swap_min)) {
+          skipped++;
           continue;
         }
       }
     }
 
-    OLOG << "name=" << cgroup_ctx.cgroup().relativePath();
-    OLOG << "  pressure=" << mem_pressure.sec_10 << ":" << mem_pressure.sec_60
-         << ":" << mem_pressure.sec_300 << "-" << io_pressure.sec_10 << ":"
-         << io_pressure.sec_60 << ":" << io_pressure.sec_300;
-    OLOG << "  mem=" << (current_usage >> 20) << "MB"
-         << " mem_avg=" << (average_usage >> 20) << "MB"
-         << " mem_low=" << (memory_low >> 20) << "MB"
-         << " mem_min=" << (memory_min >> 20) << "MB"
-         << " mem_high=" << (memory_high >> 20) << "MB"
-         << " mem_high_tmp=" << (memory_high_tmp >> 20) << "MB"
-         << " mem_max=" << (memory_max >> 20) << "MB"
-         << " mem_prot=" << (memory_protection >> 20) << "MB"
-         << " anon=" << (anon_usage >> 20) << "MB"
-         << " swap_usage=" << (swap_usage >> 20) << "MB";
-    OLOG << "  io_cost_cumulative=" << io_cost_cumulative
-         << " io_cost_rate=" << io_cost_rate;
-    OLOG << "  pg_scan_cumulative=" << pg_scan_cumulative
-         << " pg_scan_rate=" << pg_scan_rate;
-    OLOG << "  kill_preference=" << kill_preference;
+    OLOG << "cgroup/" << cgroup_ctx.cgroup().relativePath();
+    OLOG << "  pressure: some=" << mem_pressure.sec_10
+         << "|" << mem_pressure.sec_60 << "|" << mem_pressure.sec_300
+         << " full=" << io_pressure.sec_10 << "|" << io_pressure.sec_60
+         << "|" << io_pressure.sec_300;
+    OLOG << "  memory [MiB]: cur=" << (current_usage >> 20)
+         << " (" << (current_usage * 100.0 / mb)
+         << " %) eff=" << (effective_usage >> 20)
+         << " (" << (effective_usage * 100.0 / emb)
+         << " %) avg=" << (average_usage >> 20)
+         << " low=" << (memory_low >> 20)
+         << " min=" << (memory_min >> 20)
+         << " high=" << ((memory_high == (1L<<43) - 1) ? -1 : memory_high >> 20)
+         << " high_tmp="<<((memory_high_tmp == (1L<<43)-1)?-1:memory_high_tmp>>20)
+         << " max=" << ((memory_max == (1L<<43) - 1) ? -1 : memory_max >> 20)
+         << " protect=" << (memory_protection >> 20)
+         << " anon=" << (anon_usage >> 20)
+         << " swap=" << (swap_usage >> 20)
+         << " grow%=" << (cgroup_ctx.memory_growth().value_or(0) - 1.0) * 100;
+    OLOG << "  io_cost: cumulative=" << io_cost_cumulative
+         << "  rate=" << io_cost_rate;
+    OLOG << "  pg_scan: cumulative=" << pg_scan_cumulative
+         << "  rate=" << pg_scan_rate;
+    OLOG << "  kill: pref=" << kill_preference;
   }
+  if (skipped)
+    OLOG << skipped << " cgroups not shown (all mem pressures < 1"
+         << ", current mem and swap usage < 0.1% of system memory and swap)";
 }
 
 void OomdContext::refresh() {
