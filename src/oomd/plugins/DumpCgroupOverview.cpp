@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2018-present, Facebook, Inc.
+ * Portions Copyright (C) 2022, Jens Elkner (jel+oomd@cs.uni-magdeburg.de)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -58,10 +59,10 @@ void dumpCgroupOverview(const Oomd::CgroupContext& cgroup_ctx, bool always) {
 
   std::ostringstream oss;
   oss << std::setprecision(2) << std::fixed;
-  oss << "cgroup=" << path.relativePath() << " total=" << current / 1024 / 1024
-      << "MB pressure=" << pressure.sec_10 << ":" << pressure.sec_60 << ":"
-      << pressure.sec_300 << " swapfree=" << swapfree / 1024 / 1024 << "MB/"
-      << swaptotal / 1024 / 1024 << "MB pgscan=" << pgscan;
+  oss << "cgroup/" << path.relativePath() << "  total=" << current / 1024 / 1024
+      << " MiB  pressure=" << pressure.sec_10 << "|" << pressure.sec_60 << "|"
+      << pressure.sec_300 << "  swapfree=" << swapfree / 1024 / 1024 << "/"
+      << swaptotal / 1024 / 1024 << " MiB  pgscan=" << pgscan;
   OLOG << oss.str();
 }
 } // namespace
