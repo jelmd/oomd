@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2018-present, Facebook, Inc.
+ * Portions Copyright (C) 2022, Jens Elkner (jel+oomd@cs.uni-magdeburg.de)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

@@ -1,4 +1,5 @@
 # Copyright (C) 2018-present, Meta Platforms, Inc. and affiliates
+# Portions Copyright (C) 2022, Jens Elkner (jel+oomd@cs.uni-magdeburg.de)
 
 project('oomd', 'cpp',
   meson_version : '>= 0.45',
