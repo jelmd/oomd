@@ -6,7 +6,16 @@ project('oomd', 'cpp',
   license : 'GPL2',
   default_options : ['stdsplit=false', 'cpp_std=c++17'])
 
-cpp_args = ['-DMESON_BUILD']
+cpp_args = ['-DMESON_BUILD',
+	'-fmacro-prefix-map=../src/oomd/=',
+	'-fmacro-prefix-map=../src/oomd/config/=',
+	'-fmacro-prefix-map=../src/oomd/dropin/=',
+	'-fmacro-prefix-map=../src/oomd/engine/=',
+	'-fmacro-prefix-map=../src/oomd/include/=',
+	'-fmacro-prefix-map=../src/oomd/plugins/=',
+	'-fmacro-prefix-map=../src/oomd/plugins/systemd/=',
+	'-fmacro-prefix-map=../src/oomd/util/='
+]
 
 inc = include_directories('src')
 
